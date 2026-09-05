@@ -1,0 +1,175 @@
+# Testing Guide
+
+This guide walks through testing each major feature of SecureGate. Run these tests after setup.md is complete and both the collector and dashboard are running.
+
+## Pre-Test Checklist
+
+- [ ] Arduino sketch uploaded and running (Serial Monitor shows `SYSTEM_START`)
+- [ ] Collector script running (`Connected. Logging events to securegate_log.jsonl`)
+- [ ] Dashboard open at `http://127.0.0.1:5000`
+- [ ] Authorized RFID card ready (UID: 13 5A 0C 13)
+- [ ] No other program has the COM port open
+
+## Test 1: Successful Authentication
+
+**What we're testing:** Valid card + correct PIN = access granted
+
+**Steps:**
+1. In the dashboard, note the current "Total events logged" count
+2. Scan the authorized RFID card
+3. Wait for the keypad prompt (should be immediate)
+4. Enter PIN: `1234#` (# submits)
+5. You should hear a short beep and see the relay click
+
+**Expected results:**
+- Dashboard updates within 2 seconds
+- **Event sequence in log:**
+  - `RFID_AUTH_SUCCESS` (card matched)
+  - `PIN_AUTH_SUCCESS` (PIN matched)
+  - `ACCESS_GRANTED` (door unlocked)
+- **Dashboard cards update:**
+  - "Total events logged" +3
+  - "Access granted" +1
+- **Physical:** Buzzer beeps, relay energizes for ~2 seconds
+
+---
+
+## Test 2: Wrong PIN Entry
+
+**What we're testing:** Valid card but incorrect PIN = access denied, no lockout yet
+
+**Steps:**
+1. Scan the authorized card
+2. Enter PIN: `0000#` (wrong)
+3. Observe the response
+
+**Expected results:**
+- Dashboard updates
+- **Event sequence:**
+  - `RFID_AUTH_SUCCESS` (card matched)
+  - `PIN_AUTH_FAILURE` (PIN mismatch)
+  - `ACCESS_DENIED` (attempt 1/3)
+- **Physical:** Single beep (300ms), relay does NOT activate
+- **Failure counter:** Now at 1/3
+
+---
+
+## Test 3: Wrong Card
+
+**What we're testing:** Unrecognized RFID card = auth failure, counts toward brute-force lockout
+
+**Steps:**
+1. Scan a different card (or wave a non-registered object near the reader)
+2. Observe — no PIN prompt should appear
+
+**Expected results:**
+- Dashboard updates immediately
+- **Event sequence:**
+  - `RFID_AUTH_FAILURE` (card not in allowlist)
+  - `ACCESS_DENIED` (attempt 2/3, if this is the second attempt)
+- **Physical:** Single beep, no PIN prompt
+- **Failure counter:** Increments (mixes with failed PINs in the same counter)
+
+---
+
+## Test 4: Brute-Force Lockout
+
+**What we're testing:** 3 consecutive failures trigger a 30-second lockout
+
+**Steps:**
+1. Scan the authorized card
+2. Enter a wrong PIN: `1111#`
+3. (If failure counter is not yet 2, repeat steps 1-2 one more time)
+4. Scan the authorized card again
+5. Enter any PIN (or scan another wrong card immediately) — within 30 seconds
+
+**Expected results (at 3rd failure):**
+- **Event sequence:**
+  - `BRUTE_FORCE_DETECTED` (lockout triggered)
+  - `ACCESS_DENIED` (system locked out)
+- **Physical:** Buzzer sounds once per second for 30 seconds (audible deterrent)
+- **Dashboard:** "Brute-force lockouts" counter increments
+- **Behavior during lockout:** All card scans and keypad input are ignored
+- **After 30 seconds:** Lockout clears automatically, failure counter resets to 0
+- **Resumed activity:** Next scan should work normally again
+
+---
+
+## Test 5: Motion Detection (Intrusion)
+
+**What we're testing:** PIR sensor logs unauthorized presence
+
+**Steps:**
+1. Position yourself away from the monitored area
+2. Wave your hand in front of the PIR sensor (or walk past it)
+3. Observe the dashboard
+
+**Expected results:**
+- Dashboard updates
+- **Event logged:** `INTRUSION_DETECTED`
+- **Dashboard card:** "Intrusions detected" increments
+- **No physical response:** PIR detection alone doesn't trigger the buzzer or lock (it's passive monitoring)
+
+---
+
+## Test 6: Motion + Successful Auth Correlation
+
+**What we're testing:** Motion during a legitimate access looks different from motion during a lockout
+
+**Steps:**
+1. Have the dashboard and log open side-by-side
+2. Scan your authorized card and enter the correct PIN while the PIR is triggered (e.g., walk in while entering PIN)
+3. Check the log timestamps
+
+**Expected results:**
+- `INTRUSION_DETECTED` event logged
+- `RFID_AUTH_SUCCESS`, `PIN_AUTH_SUCCESS`, `ACCESS_GRANTED` follow shortly after
+- **Dashboard shows both events** — the motion is there, but there's a legitimate auth right next to it (context matters for incident review)
+
+---
+
+## Test 7: RTC Timestamps
+
+**What we're testing:** Each event has an accurate timestamp from the DS1307 module
+
+**Steps:**
+1. Note the current time
+2. Perform any action (scan card, press a key, trigger motion)
+3. Check the event in the log or dashboard
+
+**Expected results:**
+- Event timestamp matches the current time (within a few seconds of when it occurred)
+- Timestamps use format: `YYYY-MM-DD HH:MM:SS`
+- If timestamps are wildly off (e.g. Jan 1, 2000), the RTC module wasn't set properly — re-run the `SecureGate_RTC_SetTime.ino` sketch
+
+---
+
+## Test 8: Log File Persistence
+
+**What we're testing:** Events survive power cycles and are appended, not overwritten
+
+**Steps:**
+1. Perform several actions (scan card, wrong PIN, trigger motion)
+2. Close the collector script (Ctrl+C)
+3. Restart it: `python securegate_collector.py`
+4. Perform more actions
+5. Open `securegate_log.jsonl` in Notepad and scan through it
+
+**Expected results:**
+- **Log file grew** (new events appended)
+- **All previous events are still there** (not deleted or reset)
+- Each line is one complete JSON object
+
+---
+
+## Troubleshooting
+
+| Issue | Check |
+|-------|-------|
+| Dashboard shows no events | Is the collector running and connected? Check its console for "Connected" message. |
+| "Access granted" event but relay didn't click | Check the relay wiring (see wiring.md); verify the transistor and diode are in the right positions. |
+| RFID card never scans | Is the RC522 powered? (3.3V, not 5V). Is D10/D9 wired correctly? |
+| Keypad presses don't show up | Are D2–D5 (rows) and D6–D8/A0 (columns) wired? Are they not shorted together? |
+| PIR sensor stuck HIGH or never triggers | Wait ~1 minute after power-on for sensor warm-up. Check the sensor orientation and light levels. |
+| Lockout won't end after 30 seconds | Power-cycle the Arduino — there may be a firmware issue. Re-upload the sketch. |
+
