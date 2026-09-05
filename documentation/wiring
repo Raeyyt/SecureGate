@@ -1,0 +1,92 @@
+# Wiring Guide
+
+This guide maps every component to the Arduino pins they connect to. Refer to the annotated hardware photo in `images/` for a visual reference.
+
+## Pin Assignments
+
+| Component | Pin | Type | Purpose |
+|-----------|-----|------|---------|
+| RC522 RFID SDA/SS | D10 | SPI | Chip select |
+| RC522 RFID SCK | D13 | SPI | Clock |
+| RC522 RFID MOSI | D11 | SPI | Data in |
+| RC522 RFID MISO | D12 | SPI | Data out |
+| RC522 RFID RST | D9 | Digital | Reset |
+| RC522 RFID VCC | 3.3V | Power | Power (3.3V only) |
+| RC522 RFID GND | GND | Ground | Ground |
+| Keypad Row 1 | D2 | Digital | Row select |
+| Keypad Row 2 | D3 | Digital | Row select |
+| Keypad Row 3 | D4 | Digital | Row select |
+| Keypad Row 4 | D5 | Digital | Row select |
+| Keypad Col 1 | D6 | Digital | Column sense |
+| Keypad Col 2 | D7 | Digital | Column sense |
+| Keypad Col 3 | D8 | Digital | Column sense |
+| Keypad Col 4 | A0 | Analog | Column sense |
+| PIR Sensor VCC | 5V | Power | Power (5V) |
+| PIR Sensor OUT | A1 | Analog | Motion detect |
+| PIR Sensor GND | GND | Ground | Ground |
+| Buzzer + | A2 | Digital | Active buzzer positive |
+| Buzzer − | GND | Ground | Active buzzer negative |
+| Relay Driver (transistor base) | A3 | Digital | Via 1kΩ resistor to transistor base |
+| RTC SDA | A4 | I2C | I2C data |
+| RTC SCL | A5 | I2C | I2C clock |
+| RTC VCC | 5V | Power | Power (5V) |
+| RTC GND | GND | Ground | Ground |
+
+## Detailed Connections
+
+### RFID Reader (RC522)
+- **SPI bus:** D10 (SS), D11 (MOSI), D12 (MISO), D13 (SCK) — these are hardware SPI pins on the UNO
+- **Control:** D9 (RST)
+- **Power:** 3.3V ONLY (not 5V) — the RC522 is 3.3V tolerant only
+- **Ground:** GND
+
+### Keypad (4x4 matrix)
+- Rows connect to D2–D5 (pull one row LOW to read)
+- Columns connect to D6–D8 and A0 (read which columns are LOW)
+- This uses the standard Keypad library matrix scanning
+- No power connections needed for the keypad itself (it's just switches)
+
+### PIR Sensor (HC-SR501)
+- **VCC:** 5V (the HC-SR501 requires 5V)
+- **OUT:** A1 (HIGH when motion detected)
+- **GND:** GND
+- Note: The sensor has a warm-up period (~1 minute on first power). It may report HIGH on startup — this is normal
+
+### Buzzer
+- This is an **active buzzer** (it contains an oscillator), not a passive one
+- **Positive (+):** A2 (set HIGH to activate)
+- **Negative (−):** GND
+- Do NOT use PWM — just digital on/off
+
+### Relay (5V Songle SRD-05VDC)
+- This relay is driven by a **transistor driver circuit** on the breadboard (2N2222 NPN transistor + 1N4x diode + 1kΩ resistor)
+- **Arduino A3 → 1kΩ resistor → Transistor Base**
+- **Transistor Emitter → GND**
+- **Transistor Collector → Relay Coil Pin A** (via the breadboard)
+- **Relay Coil Pin B → 5V rail** (via the breadboard)
+- **Diode:** Cathode (banded end) → 5V side; Anode → Collector side (freewheeling diode to protect against back-EMF)
+- **Relay output (COM/NO/NC):** The relay output controls the simulated lock — see the hardware photo for the final wiring
+
+### RTC (DS1307)
+- **SDA:** A4 (I2C data) — shared with any other I2C devices
+- **SCL:** A5 (I2C clock) — shared with any other I2C devices
+- **VCC:** 5V
+- **GND:** GND
+- The module includes a battery holder so the clock continues even after power-off
+
+## Shared Power Rails
+
+Since Arduino pins are limited, SecureGate uses two shared power rails on the breadboard:
+- **5V rail:** Powers the PIR sensor, relay coil, and RTC
+- **GND rail:** Distributes ground to all components
+
+This reduces wiring complexity without changing functionality.
+
+## Testing Connections
+
+After wiring, before uploading code:
+1. **Visually verify** every wire matches the pin assignments above
+2. **Check for loose wires** or touching adjacent pins (especially around the relay driver circuit)
+3. **Power on** and open Serial Monitor — you should see boot messages confirming the setup
+
+If something doesn't work, first re-check the wiring; ~99% of issues on breadboard builds are wiring-related.
