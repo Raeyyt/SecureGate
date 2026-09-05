@@ -214,5 +214,5 @@ For an advanced version, consider:
 
 ---
 
-**Built with ❤️ and Arduino. Read the security docs to understand what's protected (and what's not).**
+**Read the security docs to understand what's protected (and what's not).**
 
