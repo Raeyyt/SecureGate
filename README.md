@@ -136,7 +136,7 @@ The live dashboard (`http://127.0.0.1:5000` by default) shows:
 
 The dashboard auto-refreshes every 2 seconds and stays current as long as the collector script is running.
 
-![SecureGate Dashboard](images/dashboard-screenshot.png)
+![SecureGate Dashboard](Dashboard.png)
 
 ---
 
