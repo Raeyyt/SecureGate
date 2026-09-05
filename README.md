@@ -2,7 +2,6 @@
 
 A physical access-control and intrusion-detection system built on Arduino. Two-factor authentication (RFID + PIN), real-time motion detection, and a live security dashboard — perfect for a portfolio or hands-on learning.
 
-![SecureGate Hardware Setup](Architecture1.jpg)
 
 ---
 
